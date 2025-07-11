@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Statique</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Dashboard Personnel</h1>
+    </header>
+
+    <div class="dashboard-grid">
+        <!-- Section Fichiers -->
+        <section class="card">
+            <h2>📁 Gestion des Fichiers</h2>
+            <form class="upload-form" id="uploadForm">
+                <input type="file" id="file-upload" multiple>
+                <button type="button" onclick="handleUpload()">Uploader</button>
+            </form>
+            <div class="file-list" id="fileList">
+                <!-- Les fichiers seront chargés via JS -->
+            </div>
+        </section>
+
+        <!-- Section Rappels -->
+        <section class="card">
+            <h2>⏰ Rappels</h2>
+            <form id="reminderForm">
+                <!-- Formulaire simplifié -->
+            </form>
+            <div id="remindersList"></div>
+        </section>
+
+        <!-- Section Liens -->
+        <section class="card">
+            <h2>🔗 Liens Favoris</h2>
+            <form id="linkForm">
+                <!-- Formulaire simplifié -->
+            </form>
+            <div id="linksList"></div>
+        </section>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

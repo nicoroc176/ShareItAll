@@ -1,0 +1,23 @@
+/* Conservez votre CSS existant mais : */
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #121212;
+    color: #eee;
+    margin: 0;
+    padding: 0;
+}
+
+.card {
+    background: #1e1e1e;
+    border-radius: 12px;
+    padding: 20px;
+    margin: 15px 0;
+    box-shadow: 0 0 10px #00ffc3;
+}
+
+/* Ajoutez media queries pour le responsive */
+@media (max-width: 768px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}

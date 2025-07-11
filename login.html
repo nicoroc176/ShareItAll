@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="login-container">
+    <div class="bubbles">
+        {% for i in range(15) %}
+        <div class="bubble" style="
+            left: {{ range(5, 95)|random }}%;
+            width: {{ range(10, 30)|random }}px;
+            height: {{ range(10, 30)|random }}px;
+            animation-duration: {{ range(5, 15)|random }}s;
+            animation-delay: {{ range(0, 5)|random }}s;
+        "></div>
+        {% endfor %}
+    </div>
+    
+    <form method="POST" class="login-form">
+        <h2>Connexion</h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <input type="password" name="password" placeholder="Mot de passe" required>
+        <button type="submit">Se connecter</button>
+    </form>
+</div>
+{% endblock %}

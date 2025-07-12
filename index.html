@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShareItAll</title>
+    <link rel="stylesheet" href="static/style.css">
+    <script src="static/script.js" defer></script>
+    <script src="static/theme.js" defer></script>
+</head>
+<body class="dark-theme">
+    <div class="neon-bg" id="neon-bg" style="display:none;"></div>
+    <div class="neon-particles" id="neon-particles" style="display:none;"></div>
+    <header id="header-content" style="display: none;">
+        <h1>ShareItAll</h1>
+        <div class="header-controls">
+            <span id="user-info"></span>
+            <button id="logout-btn" class="logout-btn">Déconnexion</button>
+        </div>
+    </header>
+
+    <div class="notification-container" id="notification-container">
+        <!-- Notifications will appear here -->
+    </div>
+
+    <main id="main-content" style="display: none;">
+        <div class="dashboard-grid">
+            <!-- Section Fichiers -->
+            <section class="card files-section">
+                <h2>📁 Gestion des Fichiers</h2>
+                <form class="upload-form" id="upload-form">
+                    <input type="file" name="file" id="file-upload" required>
+                    <button type="submit">Uploader</button>
+                </form>
+                
+                <div class="file-list">
+                    <h3>Fichiers existants</h3>
+                    <ul id="files-list">
+                        <!-- Les fichiers seront ajoutés ici dynamiquement -->
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Section Rappels -->
+            <section class="card reminders-section">
+                <h2>⏰ Rappels Personnalisés</h2>
+                <form class="reminder-form" id="reminder-form">
+                    <input type="text" name="title" placeholder="Titre du rappel" required>
+                    <div class="form-row">
+                        <input type="date" name="date" required>
+                        <input type="time" name="time" required>
+                    </div>
+                    <div class="form-row">
+                        <input type="number" name="alert_before" placeholder="Alerte avant" min="1" required>
+                        <select name="alert_unit">
+                            <option value="minutes">Minutes</option>
+                            <option value="hours">Heures</option>
+                            <option value="days" selected>Jours</option>
+                        </select>
+                    </div>
+                    <button type="submit">Ajouter Rappel</button>
+                </form>
+                
+                <div class="reminder-list">
+                    <h3>Rappels à venir</h3>
+                    <ul id="reminders-list">
+                        <!-- Les rappels seront ajoutés ici dynamiquement -->
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Section Liens -->
+            <section class="card links-section">
+                <h2>🔗 Liens Favoris</h2>
+                <form class="link-form" id="link-form">
+                    <input type="text" name="name" placeholder="Nom du lien" required>
+                    <input type="url" name="url" placeholder="URL (https://...)" required>
+                    <button type="submit">Ajouter Lien</button>
+                </form>
+                
+                <div class="link-list">
+                    <h3>Mes liens</h3>
+                    <ul id="links-list">
+                        <!-- Les liens seront ajoutés ici dynamiquement -->
+                    </ul>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer id="footer-content" style="display: none;">
+        <p>© 2025 ShareItAll</p>
+    </footer>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal" style="display: flex;">
+        <div class="modal-content">
+            <div class="login-container">
+                <div class="bubbles"></div>
+                <form id="login-form" class="login-form">
+                    <h2>Connexion</h2>
+                    <div id="login-alerts"></div>
+                    <input type="text" name="username" placeholder="Nom d'utilisateur" required>
+                    <input type="password" name="password" placeholder="Mot de passe" required>
+                    <button type="submit">Se connecter</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const ADMIN_PASSWORD = "Rocacher176";
+        const STORAGE_KEYS = {
+            REMINDERS: 'dashboard_reminders',
+            LINKS: 'dashboard_links',
+            FILES: 'dashboard_files',
+            LOGGED_IN: 'dashboard_logged_in',
+            USERS: 'dashboard_users',
+            CURRENT_USER: 'dashboard_current_user'
+        };
+
+        // État de l'application
+        let isLoggedIn = false;
+        let reminders = {}; // devient un objet { username: [rappels...] }
+        let links = {}; // devient un objet { username: [liens...] }
+        let files = {}; // devient un objet { username: [fichiers...] }
+        // Définition des comptes dans le code
+        const users = [
+          { id: "admin-001", username: "admin", password: "admin123", lastname: "Admin", firstname: "Super", isAdmin: true },
+          { id: "chapeau-de-paille", username: "chapeau-de-paille", password: "321", lastname: "chapeau-de", firstname: "paille", isAdmin: false }
+        ];
+        let currentUser = null;
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+            setupEventListeners();
+            generateBubbles(); // Remettre les bulles
+            checkAuth();
+            renderAll();
+            startReminderCheck();
+            renderUserInfo();
+        });
+
+        // Gestion de l'authentification
+        function checkAuth() {
+            isLoggedIn = localStorage.getItem(STORAGE_KEYS.LOGGED_IN) === 'true';
+            currentUser = JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT_USER) || 'null');
+            console.log('État de connexion:', isLoggedIn);
+            
+            if (!isLoggedIn || !currentUser) {
+                console.log('Utilisateur non connecté, affichage du modal');
+                showLoginModal();
+            } else {
+                console.log('Utilisateur connecté, affichage du dashboard');
+                hideLoginModal();
+            }
+        }
+
+        function showLoginModal() {
+            const modal = document.getElementById('login-modal');
+            modal.style.display = 'flex';
+            
+            // Cacher le contenu principal
+            const main = document.getElementById('main-content');
+            const header = document.getElementById('header-content');
+            const footer = document.getElementById('footer-content');
+            if (main) main.style.display = 'none';
+            if (header) header.style.display = 'none';
+            if (footer) footer.style.display = 'none';
+            
+            // Générer les bulles immédiatement
+            generateBubbles();
+            // Masquer le fond animé
+            document.getElementById('neon-bg').style.display = 'none';
+            document.getElementById('neon-particles').style.display = 'none';
+        }
+
+        function hideLoginModal() {
+            const modal = document.getElementById('login-modal');
+            modal.style.display = 'none';
+            
+            // Montrer le contenu principal
+            const main = document.getElementById('main-content');
+            const header = document.getElementById('header-content');
+            const footer = document.getElementById('footer-content');
+            if (main) main.style.display = 'block';
+            if (header) header.style.display = 'flex';
+            if (footer) footer.style.display = 'block';
+            // Afficher le fond animé
+            document.getElementById('neon-bg').style.display = 'block';
+            document.getElementById('neon-particles').style.display = 'block';
+        }
+
+        function generateBubbles() {
+            const bubblesContainer = document.querySelector('.bubbles');
+            if (!bubblesContainer) {
+                console.log('Bubbles container not found');
+                return;
+            }
+            
+            bubblesContainer.innerHTML = '';
+            console.log('Generating bubbles...');
+            
+            for (let i = 0; i < 15; i++) {
+                const bubble = document.createElement('div');
+                bubble.className = 'bubble';
+                bubble.style.cssText = `
+                    left: ${Math.random() * 90 + 5}%;
+                    width: ${Math.random() * 20 + 10}px;
+                    height: ${Math.random() * 20 + 10}px;
+                    animation-duration: ${Math.random() * 10 + 5}s;
+                    animation-delay: ${Math.random() * 5}s;
+                `;
+                bubblesContainer.appendChild(bubble);
+            }
+            console.log('Bubbles generated:', bubblesContainer.children.length);
+        }
+
+        // Gestion des données
+        function loadData() {
+            // On charge les objets complets
+            reminders = JSON.parse(localStorage.getItem(STORAGE_KEYS.REMINDERS) || '{}');
+            links = JSON.parse(localStorage.getItem(STORAGE_KEYS.LINKS) || '{}');
+            files = JSON.parse(localStorage.getItem(STORAGE_KEYS.FILES) || '{}');
+            currentUser = JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT_USER) || 'null');
+        }
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(reminders));
+            localStorage.setItem(STORAGE_KEYS.LINKS, JSON.stringify(links));
+            localStorage.setItem(STORAGE_KEYS.FILES, JSON.stringify(files));
+        }
+
+        function saveUsers() {
+            localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+        }
+
+        function saveCurrentUser() {
+            localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
+        }
+
+        function saveFiles() {
+            localStorage.setItem(STORAGE_KEYS.FILES, JSON.stringify(files));
+        }
+
+        function saveReminders() {
+            localStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(reminders));
+        }
+
+        function saveLinks() {
+            localStorage.setItem(STORAGE_KEYS.LINKS, JSON.stringify(links));
+        }
+
+        // Configuration des événements
+        function setupEventListeners() {
+            // Login
+            document.getElementById('login-form').addEventListener('submit', handleLogin);
+            document.getElementById('logout-btn').addEventListener('click', handleLogout);
+
+            // Forms
+            document.getElementById('reminder-form').addEventListener('submit', handleAddReminder);
+            document.getElementById('link-form').addEventListener('submit', handleAddLink);
+            document.getElementById('upload-form').addEventListener('submit', handleFileUpload);
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const username = e.target.username.value.trim();
+            const password = e.target.password.value;
+            const user = users.find(u => u.username === username && u.password === password);
+            if (user) {
+                localStorage.setItem(STORAGE_KEYS.LOGGED_IN, 'true');
+                currentUser = user;
+                localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
+                hideLoginModal();
+                showNotification('Connexion réussie', 'success');
+                e.target.reset();
+                renderUserInfo();
+            } else {
+                showLoginAlert('Nom d\'utilisateur ou mot de passe incorrect', 'error');
+            }
+        }
+
+        function handleLogout() {
+            localStorage.removeItem(STORAGE_KEYS.LOGGED_IN);
+            localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+            isLoggedIn = false;
+            currentUser = null;
+            showLoginModal();
+            showNotification('Déconnexion réussie', 'info');
+            renderUserInfo();
+        }
+
+        function showLoginAlert(message, type) {
+            const alertsContainer = document.getElementById('login-alerts');
+            alertsContainer.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+        }
+
+        // Lors de l'inscription, créer un dossier virtuel pour l'utilisateur
+        function handleRegister(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const lastname = formData.get('lastname').trim();
+            const firstname = formData.get('firstname').trim();
+            const username = formData.get('username').trim();
+            const password = formData.get('password');
+            if (!lastname || !firstname || !username || !password) {
+                showRegisterAlert('Tous les champs sont requis', 'error');
+                return;
+            }
+            if (users.find(u => u.username === username)) {
+                showRegisterAlert('Nom d\'utilisateur déjà utilisé', 'error');
+                return;
+            }
+            const newUser = { lastname, firstname, username, password };
+            users.push(newUser);
+            saveUsers();
+            // Créer un dossier virtuel pour l'utilisateur
+            const folderKey = lastname + firstname;
+            if (!reminders[folderKey]) reminders[folderKey] = [];
+            if (!links[folderKey]) links[folderKey] = [];
+            if (!files[folderKey]) files[folderKey] = [];
+            saveData();
+            showRegisterAlert('Compte créé avec succès !', 'success');
+            setTimeout(() => {
+                document.getElementById('register-form').reset();
+                document.getElementById('register-form').style.display = 'none';
+                document.getElementById('login-form').style.display = 'block';
+                document.getElementById('register-alerts').innerHTML = '';
+            }, 1000);
+        }
+
+        function showRegisterAlert(message, type) {
+            const alertsContainer = document.getElementById('register-alerts');
+            alertsContainer.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+        }
+
+        // Gestion des rappels
+        function handleAddReminder(e) {
+            e.preventDefault();
+            if (!currentUser) return;
+            const formData = new FormData(e.target);
+            
+            const title = formData.get('title', '').trim();
+            const date = formData.get('date', '');
+            const time = formData.get('time', '');
+            const alertBefore = formData.get('alert_before', '');
+            const alertUnit = formData.get('alert_unit', 'hours');
+
+            if (!title || !date || !time || !alertBefore) {
+                showNotification('Tous les champs sont requis', 'error');
+                return;
+            }
+
+            const reminderDateTime = new Date(`${date} ${time}`);
+            const alertBeforeInt = parseInt(alertBefore);
+            
+            let alertTime;
+            switch (alertUnit) {
+                case 'minutes':
+                    alertTime = new Date(reminderDateTime.getTime() - alertBeforeInt * 60000);
+                    break;
+                case 'hours':
+                    alertTime = new Date(reminderDateTime.getTime() - alertBeforeInt * 3600000);
+                    break;
+                case 'days':
+                    alertTime = new Date(reminderDateTime.getTime() - alertBeforeInt * 86400000);
+                    break;
+            }
+
+            const newReminder = {
+                id: Date.now().toString(),
+                title: title,
+                datetime: reminderDateTime.toISOString(),
+                alert_time: alertTime.toISOString(),
+                created_at: new Date().toISOString()
+            };
+
+            const folderKey = currentUser.lastname + currentUser.firstname;
+            if (!reminders[folderKey]) reminders[folderKey] = [];
+            reminders[folderKey].push(newReminder);
+            saveReminders();
+            renderReminders();
+            e.target.reset();
+            showNotification('Rappel ajouté avec succès', 'success');
+        }
+
+        function deleteReminder(id) {
+            if (!currentUser) return;
+            const folderKey = currentUser.lastname + currentUser.firstname;
+            reminders[folderKey] = (reminders[folderKey] || []).filter(r => r.id !== id);
+            saveReminders();
+            renderReminders();
+            showNotification('Rappel supprimé avec succès', 'success');
+        }
+
+        // Gestion des liens
+        function handleAddLink(e) {
+            e.preventDefault();
+            if (!currentUser) return;
+            const formData = new FormData(e.target);
+            
+            const name = formData.get('name', '').trim();
+            let url = formData.get('url', '').trim();
+
+            if (!name || !url) {
+                showNotification('Nom et URL sont requis', 'error');
+                return;
+            }
+
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+            }
+
+            const newLink = {
+                id: Date.now().toString(),
+                name: name,
+                url: url
+            };
+
+            const folderKey = currentUser.lastname + currentUser.firstname;
+            if (!links[folderKey]) links[folderKey] = [];
+            links[folderKey].push(newLink);
+            saveLinks();
+            renderLinks();
+            e.target.reset();
+            showNotification('Lien ajouté avec succès', 'success');
+        }
+
+        function deleteLink(id) {
+            if (!currentUser) return;
+            const folderKey = currentUser.lastname + currentUser.firstname;
+            links[folderKey] = (links[folderKey] || []).filter(l => l.id !== id);
+            saveLinks();
+            renderLinks();
+            showNotification('Lien supprimé avec succès', 'success');
+        }
+
+        // Gestion des fichiers
+        function handleFileUpload(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('file-upload');
+            const file = fileInput.files[0];
+            if (!file) {
+                showNotification('Aucun fichier sélectionné', 'error');
+                return;
+            }
+            if (!currentUser) {
+                showNotification('Erreur utilisateur', 'error');
+                return;
+            }
+            const folderKey = currentUser.lastname + currentUser.firstname;
+            const fileData = {
+                id: Date.now().toString(),
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                lastModified: file.lastModified
+            };
+            if (!files[folderKey]) files[folderKey] = [];
+            files[folderKey].push(fileData);
+            saveFiles();
+            renderFiles();
+            fileInput.value = '';
+            showNotification('Fichier uploadé avec succès', 'success');
+        }
+
+        function deleteFile(id) {
+            if (!currentUser) return;
+            const folderKey = currentUser.lastname + currentUser.firstname;
+            files[folderKey] = (files[folderKey] || []).filter(f => f.id !== id);
+            saveFiles();
+            renderFiles();
+            showNotification('Fichier supprimé avec succès', 'success');
+        }
+
+        // Rendu de l'interface
+        function renderAll() {
+            if (!isLoggedIn) return;
+            
+            renderReminders();
+            renderLinks();
+            renderFiles();
+        }
+
+        function renderReminders() {
+            const container = document.getElementById('reminders-list');
+            if (!currentUser) {
+                container.innerHTML = '<p>Aucun rappel programmé.</p>';
+                return;
+            }
+            const folderKey = currentUser.lastname + currentUser.firstname;
+            if (!reminders[folderKey] || reminders[folderKey].length === 0) {
+                container.innerHTML = '<p>Aucun rappel programmé.</p>';
+                return;
+            }
+
+            container.innerHTML = reminders[folderKey].map(reminder => {
+                const date = new Date(reminder.datetime);
+                const alertDate = new Date(reminder.alert_time);
+                
+                return `
+                    <li>
+                        <div>
+                            <strong>${reminder.title}</strong>
+                            <span>${date.toLocaleString('fr-FR')}</span>
+                            <small>Alerte: ${alertDate.toLocaleString('fr-FR')}</small>
+                        </div>
+                        <button onclick="deleteReminder('${reminder.id}')" class="btn-delete">×</button>
+                    </li>
+                `;
+            }).join('');
+        }
+
+        function renderLinks() {
+            const container = document.getElementById('links-list');
+            if (!currentUser) {
+                container.innerHTML = '<p>Aucun lien enregistré.</p>';
+                return;
+            }
+            const folderKey = currentUser.lastname + currentUser.firstname;
+            if (!links[folderKey] || links[folderKey].length === 0) {
+                container.innerHTML = '<p>Aucun lien enregistré.</p>';
+                return;
+            }
+
+            container.innerHTML = links[folderKey].map(link => `
+                <li>
+                    <a href="${link.url}" target="_blank">${link.name}</a>
+                    <button onclick="deleteLink('${link.id}')" class="btn-delete">×</button>
+                </li>
+            `).join('');
+        }
+
+        function renderFiles() {
+            const container = document.getElementById('files-list');
+            if (!currentUser) {
+                container.innerHTML = '<p>Aucun fichier uploadé.</p>';
+                return;
+            }
+            const folderKey = currentUser.lastname + currentUser.firstname;
+            if (!files[folderKey] || files[folderKey].length === 0) {
+                container.innerHTML = '<p>Aucun fichier uploadé.</p>';
+                return;
+            }
+            container.innerHTML = files[folderKey].map(file => `
+                <li>
+                    <span>${file.name} (${(file.size / 1024).toFixed(2)} KB)</span>
+                    <div>
+                        <button onclick="downloadFile('${file.id}')" class="btn-download">Télécharger</button>
+                        <button onclick="deleteFile('${file.id}')" class="btn-delete">Supprimer</button>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        function downloadFile(id) {
+            if (!currentUser) return;
+            const folderKey = currentUser.lastname + currentUser.firstname;
+            const file = (files[folderKey] || []).find(f => f.id === id);
+            if (file) {
+                showNotification('Téléchargement simulé pour ' + file.name, 'info');
+            }
+        }
+
+        // Vérification des rappels
+        function startReminderCheck() {
+            setInterval(checkReminders, 60000); // Toutes les minutes
+            checkReminders(); // Vérification immédiate
+        }
+
+        function checkReminders() {
+            if (!currentUser) return;
+            const folderKey = currentUser.lastname + currentUser.firstname;
+            const now = new Date();
+            const alerts = (reminders[folderKey] || []).filter(reminder => {
+                const alertTime = new Date(reminder.alert_time);
+                const reminderTime = new Date(reminder.datetime);
+                return alertTime <= now && now <= reminderTime;
+            });
+
+            alerts.forEach(alert => {
+                const reminderTime = new Date(alert.datetime);
+                showNotification(`Rappel: ${alert.title} à ${reminderTime.toLocaleString('fr-FR')}`, 'warning');
+            });
+        }
+
+        // Notifications
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('notification-container');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <span>${message}</span>
+                <button onclick="this.parentElement.remove()">×</button>
+            `;
+            
+            container.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'fadeOut 0.5s ease-out';
+                setTimeout(() => notification.remove(), 500);
+            }, 5000);
+        }
+
+        // Exposer les fonctions globalement
+        window.deleteReminder = deleteReminder;
+        window.deleteLink = deleteLink;
+        window.deleteFile = deleteFile;
+        window.downloadFile = downloadFile;
+        window.showNotification = showNotification;
+
+        // Ajoute une fonction pour afficher les infos utilisateur dans le header
+        function renderUserInfo() {
+            const userInfo = document.getElementById('user-info');
+            if (currentUser && userInfo) {
+                userInfo.textContent = `ID: ${currentUser.id} | ${currentUser.firstname} ${currentUser.lastname}`;
+            } else if(userInfo) {
+                userInfo.textContent = '';
+            }
+        }
+
+        // Animation JS des halos verts du fond (3 halos)
+        function randomNeonMove() {
+            const neonBg = document.getElementById('neon-bg');
+            if (!neonBg) return;
+            // Halos via CSS vars
+            function setHaloVars(suffix, wMin, wMax, hMin, hMax) {
+                const x = Math.random() * 60 - 20; // -20vw à +40vw
+                const y = Math.random() * 60 - 10; // -10vh à +50vh
+                const scale = 0.9 + Math.random() * 0.4; // 0.9 à 1.3
+                const w = wMin + Math.random() * (wMax - wMin);
+                const h = hMin + Math.random() * (hMax - hMin);
+                neonBg.style.setProperty(`--halo${suffix}-x`, `${x}vw`);
+                neonBg.style.setProperty(`--halo${suffix}-y`, `${y}vh`);
+                neonBg.style.setProperty(`--halo${suffix}-scale`, scale);
+                neonBg.style.setProperty(`--halo${suffix}-w`, `${w}vw`);
+                neonBg.style.setProperty(`--halo${suffix}-h`, `${h}vw`);
+            }
+            setHaloVars('1', 40, 70, 40, 70);
+            setHaloVars('2', 30, 50, 30, 50);
+            // Halo 3 (div)
+            const halo3 = document.getElementById('halo3');
+            if (halo3) {
+                const x = Math.random() * 80 - 20; // -20vw à +60vw
+                const y = Math.random() * 60 - 10;
+                const scale = 0.8 + Math.random() * 0.6;
+                const w = 30 + Math.random() * 40;
+                const h = 30 + Math.random() * 40;
+                halo3.style.left = `${x}vw`;
+                halo3.style.top = `${y}vh`;
+                halo3.style.width = `${w}vw`;
+                halo3.style.height = `${h}vw`;
+                halo3.style.transform = `scale(${scale})`;
+            }
+        }
+        // Applique les variables CSS dans le style
+        const neonStyle = document.createElement('style');
+        neonStyle.innerHTML = `
+.neon-bg::before {
+    left: var(--halo1-x, 0vw);
+    top: var(--halo1-y, 0vh);
+    width: var(--halo1-w, 60vw);
+    height: var(--halo1-h, 60vw);
+    transform: scale(var(--halo1-scale, 1));
+}
+.neon-bg::after {
+    right: var(--halo2-x, 0vw);
+    bottom: var(--halo2-y, 0vh);
+    width: var(--halo2-w, 40vw);
+    height: var(--halo2-h, 40vw);
+    transform: scale(var(--halo2-scale, 1));
+}`;
+        document.head.appendChild(neonStyle);
+        // Ajoute le 3e halo
+        window.addEventListener('DOMContentLoaded', function() {
+            const neonBg = document.getElementById('neon-bg');
+            if (neonBg && !document.getElementById('halo3')) {
+                const halo3 = document.createElement('div');
+                halo3.className = 'halo3';
+                halo3.id = 'halo3';
+                neonBg.appendChild(halo3);
+            }
+            randomNeonMove();
+        });
+        setInterval(randomNeonMove, 3500);
+        // Animation particules lumineuses
+        function spawnNeonParticle() {
+            const container = document.getElementById('neon-particles');
+            if (!container) return;
+            const p = document.createElement('div');
+            p.className = 'neon-particle';
+            p.style.left = `${Math.random() * 100}vw`;
+            p.style.bottom = '0vh';
+            p.style.opacity = 0.5 + Math.random() * 0.5;
+            p.style.width = `${6 + Math.random() * 8}px`;
+            p.style.height = p.style.width;
+            container.appendChild(p);
+            setTimeout(() => { p.remove(); }, 6000);
+        }
+        setInterval(spawnNeonParticle, 400);
+    </script>
+
+    <style>
+        /* Styles pour le modal de login */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .login-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .bubbles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .bubble {
+            position: absolute;
+            bottom: -100px;
+            background: rgba(0, 255, 195, 0.5);
+            border-radius: 50%;
+            animation: rise 10s infinite ease-in;
+            filter: blur(5px);
+            box-shadow: 0 0 10px #00ffc3, 0 0 20px #00ffc3;
+        }
+
+        .login-form {
+            z-index: 10;
+            position: relative;
+        }
+
+        @keyframes rise {
+            0% {
+                bottom: -100px;
+                transform: translateX(0);
+            }
+            50% {
+                transform: translateX(100px);
+            }
+            100% {
+                bottom: 1000px;
+                transform: translateX(-200px);
+            }
+        }
+
+        /* Cacher le contenu principal quand le modal est ouvert */
+        .modal[style*="display: flex"] ~ main,
+        .modal[style*="display: flex"] ~ header,
+        .modal[style*="display: flex"] ~ footer {
+            display: none !important;
+        }
+
+        /* Effet néon vert sur les cadres */
+        .card {
+            box-shadow: 0 0 16px 2px #39ff1480, 0 0 32px 4px #39ff1440;
+            border: 2px solid #39ff14;
+            position: relative;
+            z-index: 2;
+            background: #181818;
+        }
+
+        /* Sticky footer */
+        html, body {
+            height: 100%;
+        }
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        main {
+            flex: 1 0 auto;
+        }
+        footer {
+            flex-shrink: 0;
+            width: 100%;
+            text-align: center;
+            padding: 1rem;
+            background-color: var(--card-bg, #181818);
+            margin-top: 2rem;
+            box-shadow: 0 -2px 5px var(--shadow-color, rgba(0,0,0,0.3));
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Fond animé néon vert sur fond noir */
+        .neon-bg {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+            background: #000;
+            opacity: 1;
+            overflow: hidden;
+        }
+        .neon-bg::before, .neon-bg::after {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            opacity: 0.5;
+            pointer-events: none;
+            transition: transform 3.5s cubic-bezier(.77,0,.18,1);
+        }
+        .neon-bg::before {
+            width: 60vw;
+            height: 60vw;
+            background: radial-gradient(circle, #39ff14 0%, transparent 70%);
+            left: 0; top: 0;
+        }
+        .neon-bg::after {
+            width: 40vw;
+            height: 40vw;
+            background: radial-gradient(circle, #39ff14 0%, transparent 80%);
+            right: 0; bottom: 0;
+        }
+        /* Troisième halo dynamique */
+        .neon-bg .halo3 {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            opacity: 0.4;
+            pointer-events: none;
+            background: radial-gradient(circle, #39ff14 0%, transparent 80%);
+            transition: transform 3.5s cubic-bezier(.77,0,.18,1), width 3.5s, height 3.5s;
+            z-index: 1;
+        }
+        /* Particules lumineuses */
+        .neon-particles {
+            position: fixed;
+            left: 0; top: 0; width: 100vw; height: 100vh;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .neon-particle {
+            position: absolute;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #39ff14 0%, #39ff1466 60%, transparent 100%);
+            box-shadow: 0 0 12px 4px #39ff14cc;
+            opacity: 0.7;
+            animation: neonParticleUp 6s linear forwards;
+        }
+        @keyframes neonParticleUp {
+            0% { opacity: 0.7; transform: translateY(0) scale(1); }
+            80% { opacity: 0.8; }
+            100% { opacity: 0; transform: translateY(-80vh) scale(1.2); }
+        }
+
+        body, .dashboard-grid, main, header, footer {
+            position: relative;
+            z-index: 2;
+        }
+
+        #login-modal[style*="display: flex"] ~ #neon-bg {
+            display: none !important;
+        }
+        header {
+            background: #101010;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 12px #39ff1420;
+            position: relative;
+            z-index: 10;
+        }
+        header h1 {
+            color: #39ff14;
+            text-shadow: 0 0 8px #39ff14, 0 0 24px #39ff14cc, 0 0 48px #39ff1440;
+            font-family: 'Orbitron', 'Segoe UI', Arial, sans-serif;
+            letter-spacing: 2px;
+            font-size: 2.2rem;
+            animation: neonTitleGlow 2.5s infinite alternate;
+            position: relative;
+        }
+        header h1::after {
+            content: '';
+            display: block;
+            margin: 0.5rem auto 0 auto;
+            width: 80%;
+            height: 6px;
+            border-radius: 4px;
+            background: linear-gradient(90deg, transparent 0%, #39ff14 40%, #39ff14 60%, transparent 100%);
+            box-shadow: 0 0 16px 4px #39ff14cc, 0 0 32px 8px #39ff1440;
+            opacity: 0.7;
+        }
+        @keyframes neonTitleGlow {
+            0% { text-shadow: 0 0 8px #39ff14, 0 0 24px #39ff14cc, 0 0 48px #39ff1440; }
+            100% { text-shadow: 0 0 16px #39ff14, 0 0 32px #39ff14cc, 0 0 64px #39ff1440; }
+        }
+    </style>
+</body>
+</html> 

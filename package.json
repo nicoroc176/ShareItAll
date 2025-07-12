@@ -1,0 +1,29 @@
+{
+  "name": "ShareItAll",
+  "version": "1.0.0",
+  "description": "ceci est un site de paratge",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server -p $PORT -c-1",
+    "build": "echo 'No build step required'"
+  },
+  "dependencies": {
+    "http-server": "^14.1.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "."
+  },
+  "keywords": [
+    "dashboard",
+    "personal",
+    "reminders",
+    "files",
+    "links"
+  ],
+  "author": "ShareItAlll",
+  "license": "MIT"
+} 

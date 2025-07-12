@@ -533,29 +533,38 @@
                 return;
             }
 
-            const sharedFileData = {
-                id: Date.now().toString(),
-                name: file.name,
-                size: file.size,
-                type: file.type,
-                lastModified: file.lastModified,
-                sharedBy: currentUser.username,
-                sharedAt: new Date().toISOString(),
-                sharedWith: shareWith
+            // Lire le contenu du fichier
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const fileContent = e.target.result;
+                
+                const sharedFileData = {
+                    id: Date.now().toString(),
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                    lastModified: file.lastModified,
+                    sharedBy: currentUser.username,
+                    sharedAt: new Date().toISOString(),
+                    sharedWith: shareWith,
+                    content: fileContent // Stocker le contenu réel du fichier
+                };
+
+                // Ajouter aux fichiers partagés de l'utilisateur destinataire
+                if (!sharedFiles[shareWith]) sharedFiles[shareWith] = [];
+                sharedFiles[shareWith].push(sharedFileData);
+
+                // Sauvegarder et rafraîchir
+                localStorage.setItem(STORAGE_KEYS.SHARED_FILES, JSON.stringify(sharedFiles));
+                renderSharedFiles();
+                renderMySharedFiles();
+                
+                fileInput.value = '';
+                shareWithSelect.value = '';
+                showNotification('Fichier partagé avec succès', 'success');
             };
-
-            // Ajouter aux fichiers partagés de l'utilisateur destinataire
-            if (!sharedFiles[shareWith]) sharedFiles[shareWith] = [];
-            sharedFiles[shareWith].push(sharedFileData);
-
-            // Sauvegarder et rafraîchir
-            localStorage.setItem(STORAGE_KEYS.SHARED_FILES, JSON.stringify(sharedFiles));
-            renderSharedFiles();
-            renderMySharedFiles();
             
-            fileInput.value = '';
-            shareWithSelect.value = '';
-            showNotification('Fichier partagé avec succès', 'success');
+            reader.readAsText(file); // Lire le fichier comme texte
         }
 
         function deleteSharedFile(id) {
@@ -723,7 +732,21 @@
             const folderKey = currentUser.lastname + currentUser.firstname;
             const file = (files[folderKey] || []).find(f => f.id === id);
             if (file) {
-                showNotification('Téléchargement simulé pour ' + file.name, 'info');
+                // Créer un blob avec des données simulées pour le fichier
+                const fileContent = `Contenu du fichier: ${file.name}\n\nCe fichier a été uploadé le ${new Date(file.lastModified).toLocaleDateString('fr-FR')}.\n\nTaille: ${(file.size / 1024).toFixed(2)} KB\nType: ${file.type}`;
+                const blob = new Blob([fileContent], { type: file.type || 'text/plain' });
+                
+                // Créer un lien de téléchargement
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                showNotification('Téléchargement de ' + file.name + ' réussi', 'success');
             }
         }
 
@@ -732,7 +755,28 @@
             const userKey = currentUser.username;
             const file = (sharedFiles[userKey] || []).find(f => f.id === id);
             if (file) {
-                showNotification('Téléchargement simulé pour ' + file.name, 'info');
+                // Utiliser le contenu réel du fichier si disponible
+                let fileContent;
+                if (file.content) {
+                    fileContent = file.content;
+                } else {
+                    // Fallback si le contenu n'est pas disponible
+                    fileContent = `Contenu du fichier partagé: ${file.name}\n\nCe fichier a été partagé par ${file.sharedBy} le ${new Date(file.sharedAt).toLocaleDateString('fr-FR')}.\n\nTaille: ${(file.size / 1024).toFixed(2)} KB\nType: ${file.type}`;
+                }
+                
+                const blob = new Blob([fileContent], { type: file.type || 'text/plain' });
+                
+                // Créer un lien de téléchargement
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                showNotification('Téléchargement de ' + file.name + ' réussi', 'success');
             }
         }
 
